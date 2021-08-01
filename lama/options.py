@@ -224,7 +224,7 @@ def __add_elmo_args(parser):
 
 
 def parse_args(parser):
-    args = parser.parse_args()
+    args = parser.parse_args(args=[])
     args.models_names = [x.strip().lower() for x in args.models.split(",")]
     if "fconv" in args.models_names:
         if args.data is None:
