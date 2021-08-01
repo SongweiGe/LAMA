@@ -51,11 +51,13 @@ def __print_top_k(value_max_probs, index_max_probs, vocab, mask_topk, index_list
     return result, msg
 
 
-def get_ranking(log_probs, masked_indices, vocab, label_index = None, index_list = None, topk = 1000, P_AT = 10, print_generation=True):
-
+def get_ranking(log_probs, vocab, label_index = None, index_list = None, topk = 1000, P_AT = 10, print_generation=True):
     experiment_result = {}
 
-    log_probs, index_max_probs, value_max_probs = __max_probs_values_indices(masked_indices, log_probs, topk=topk)
+    value_max_probs, index_max_probs = torch.topk(input=log_probs, k=topk, dim=0)
+    index_max_probs = index_max_probs.numpy().astype(int)
+    value_max_probs = value_max_probs.detach().numpy()
+
     result_masked_topk, return_msg = __print_top_k(value_max_probs, index_max_probs, vocab, topk, index_list)
     experiment_result['topk'] = result_masked_topk
 
@@ -74,7 +76,7 @@ def get_ranking(log_probs, masked_indices, vocab, label_index = None, index_list
             label_index = index_list.index(label_index)
 
         query = torch.full(value_max_probs.shape, label_index, dtype=torch.long).numpy().astype(int)
-        ranking_position = (index_max_probs==query).nonzero()
+        ranking_position = (index_max_probs == query).nonzero()
 
         # LABEL PERPLEXITY
         tokens = torch.from_numpy(np.asarray(label_index))
@@ -84,13 +86,13 @@ def get_ranking(log_probs, masked_indices, vocab, label_index = None, index_list
         )
         PERPLEXITY = label_perplexity.item()
 
-        if len(ranking_position) >0 and ranking_position[0].shape[0] != 0:
+        if len(ranking_position) > 0 and ranking_position[0].shape[0] != 0:
             rank = ranking_position[0][0] + 1
 
             # print("rank: {}".format(rank))
 
             if rank >= 0:
-                MRR = (1/rank)
+                MRR = (1 / rank)
             if rank >= 0 and rank <= P_AT:
                 P_AT_X = 1.
             if rank == 1:
@@ -109,35 +111,11 @@ def get_ranking(log_probs, masked_indices, vocab, label_index = None, index_list
     return MRR, P_AT_X, experiment_result, return_msg
 
 
-def __overlap_negation(index_max_probs__negated, index_max_probs):
-    # compares first ranked prediction of affirmative and negated statements
-    # if true 1, else: 0
-    return int(index_max_probs__negated == index_max_probs)
+def get_ranking_select(log_probs, masked_indices, vocab, label_index = None, index_list = None, topk = 1000, P_AT = 10, print_generation=True):
+    # score only first mask
+    masked_indices = masked_indices[:1]
 
+    masked_index = masked_indices[0]
+    log_probs = log_probs[masked_index]
 
-def get_negation_metric(log_probs, masked_indices, log_probs_negated,
-                        masked_indices_negated, vocab, index_list=None,
-                        topk = 1):
-
-    return_msg = ""
-    # if negated sentence present
-    if len(masked_indices_negated) > 0:
-
-        log_probs, index_max_probs, _ = \
-            __max_probs_values_indices(masked_indices, log_probs, topk=topk)
-        log_probs_negated, index_max_probs_negated, _ = \
-            __max_probs_values_indices(masked_indices_negated,
-                                       log_probs_negated, topk=topk)
-
-        # overlap btw. affirmative and negated first ranked prediction: 0 or 1
-        overlap = __overlap_negation(index_max_probs_negated[0],
-                                     index_max_probs[0])
-        # rank corrl. btw. affirmative and negated predicted log_probs
-        spearman_rank_corr = scipy.stats.spearmanr(log_probs,
-                                                   log_probs_negated)[0]
-
-    else:
-        overlap = np.nan
-        spearman_rank_corr = np.nan
-
-    return overlap, spearman_rank_corr, return_msg
+    return get_ranking(log_probs, vocab, label_index=label_index, index_list=index_list, topk=topk, P_AT=P_AT, print_generation=print_generation)
