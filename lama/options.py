@@ -13,8 +13,9 @@ def get_general_parser():
         "--language-models",
         "--lm",
         dest="models",
+        default="bert",
         help="comma separated list of language models",
-        required=True,
+        required=False,
     )
     parser.add_argument(
         "--spacy_model",
